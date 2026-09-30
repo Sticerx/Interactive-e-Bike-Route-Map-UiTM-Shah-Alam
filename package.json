@@ -1,0 +1,17 @@
+{
+  "name": "route-map-uitm",
+  "version": "1.0.0",
+  "description": "Interactive e-Bike Route Map UiTM Shah Alam",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "abid",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^44.5.0"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4"
+  }
+}
