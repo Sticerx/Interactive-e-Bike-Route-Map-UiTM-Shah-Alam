@@ -71,8 +71,9 @@ const KINDS = [
   ['roads', 'Road safety colors'], ['parking', 'Parking'], ['charging', 'Charging station'],
   ['noentry', 'No entry'], ['caution', 'Caution road'], ['safe', 'Safe spot']
 ];
+const DESC = { roads: 'Colored by safety level', parking: 'eBike parking spots', charging: 'Charging point', noentry: 'Hover for a video preview', caution: 'Ride with extra care', safe: 'Low-risk spot' };
 document.getElementById('toggles').innerHTML = KINDS.map(([k, label]) =>
-  `<label><input type="checkbox" data-k="${k}" checked><span class="pin sm ${k}"><span>${GLYPH[k]}</span></span>${label}</label>`).join('');
+  `<label class="row"><span class="pin sm ${k}"><span>${GLYPH[k]}</span></span><span>${label}<small>${DESC[k]}</small></span><input type="checkbox" class="switch" data-k="${k}" checked></label>`).join('');
 document.getElementById('toggles').addEventListener('change', e => {
   const k = e.target.dataset.k;
   e.target.checked ? layers[k].addTo(map) : map.removeLayer(layers[k]);
@@ -83,6 +84,7 @@ document.getElementById('list').innerHTML = RISKS.map(r =>
 document.getElementById('list').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   const r = RISKS.find(x => x.id == b.dataset.id);
+  if (innerWidth < 800) setSidebar(false);
   map.flyTo(r.pos, 18, { duration: 0.8 });
   r.kind === 'noentry' ? openModal(r) : markers[r.id].openPopup();
 });
@@ -160,3 +162,21 @@ document.addEventListener('error', e => {
   d.className = 'novid'; d.textContent = 'Video not added yet';
   e.target.replaceWith(d);
 }, true);
+
+// ----- floating legend button + places drawer -----
+const legend = document.getElementById('legend'), legendBtn = document.getElementById('legend-btn'), sideBtn = document.getElementById('side-btn');
+function setLegend(open) {
+  legend.hidden = !open; legendBtn.setAttribute('aria-expanded', open);
+  if (open && innerWidth < 800) setSidebar(false);
+}
+function setSidebar(open) {
+  document.body.classList.toggle('side-open', open); sideBtn.setAttribute('aria-expanded', open);
+  if (open && innerWidth < 800) setLegend(false);
+}
+legendBtn.addEventListener('click', () => setLegend(legend.hidden));
+document.getElementById('legend-close').addEventListener('click', () => setLegend(false));
+sideBtn.addEventListener('click', () => setSidebar(true));
+document.getElementById('side-close').addEventListener('click', () => setSidebar(false));
+map.on('click', () => { setLegend(false); if (innerWidth < 800) setSidebar(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.hidden) setLegend(false); });
+setSidebar(innerWidth >= 800);

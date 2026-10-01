@@ -3,90 +3,160 @@
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob:; connect-src https:">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4b2e83">
+<meta name="color-scheme" content="light">
 <title>eBike Route Safety Map - UiTM Shah Alam</title>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <style>
 :root {
-  --ink: #1d1a26; --paper: #f7f6fa; --line: #dcd8e6; --muted: #6b6779;
-  --brand: #4b2e83; --red: #d92d20; --orange: #f79009; --green: #2e9e5b; --blue: #1d6fd8; --amber: #f5b800;
+  color-scheme: light;
+  --solid: #fff; --card: rgba(255,255,255,.93); --ink: #1d1a26; --muted: #6b6779; --line: #e3dfee; --tint: #efecf7;
+  --brand: #4b2e83; --brand2: #6a45b8; --red: #d92d20; --orange: #f79009; --green: #2e9e5b; --blue: #1d6fd8; --amber: #f5b800;
+  --shadow: 0 8px 28px rgba(29,26,38,.22); --r: 16px;
+  --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px);
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
-body { font: 14px/1.45 "Segoe UI", system-ui, sans-serif; color: var(--ink); display: grid; grid-template-columns: 320px 1fr; }
-aside { background: var(--paper); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
-aside header { background: var(--brand); color: #fff; padding: 16px 18px; }
-aside h1 { font-size: 17px; margin: 0 0 2px; font-weight: 650; }
-aside header p { margin: 0; font-size: 12.5px; opacity: .85; }
-.sec { padding: 12px 18px; border-bottom: 1px solid var(--line); }
-.sec h2 { font-size: 13px; margin: 0 0 8px; }
-#toggles label { display: flex; align-items: center; gap: 10px; padding: 4px 0; cursor: pointer; }
-#list-wrap { overflow-y: auto; flex: 1; padding: 12px 18px; }
-#list { list-style: none; margin: 0; padding: 0; }
-#list button { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; padding: 8px 6px; border-radius: 6px; cursor: pointer; }
-#list button:hover, #list button:focus-visible { background: #ebe7f4; }
-#list button:focus-visible { outline: 2px solid var(--brand); }
-#list small { display: block; color: var(--muted); font-size: 12px; }
-#list b { color: var(--muted); font-weight: 600; }
-#map { height: 100%; }
+body { font: 14px/1.45 system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; color: var(--ink); background: var(--solid); overflow: hidden; -webkit-text-size-adjust: 100%; }
+#map { position: fixed; inset: 0; }
+button { font: inherit; color: inherit; }
 
-/* pins */
-.pin { width: 30px; height: 30px; display: grid; place-items: center; font-weight: 700; color: #fff; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
-.pin.sm { width: 22px; height: 22px; font-size: 12px; box-shadow: none; }
+.card { background: var(--card); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); z-index: 1000; }
+.hud { position: fixed; z-index: 1000; top: calc(12px + var(--st)); left: calc(12px + var(--sl)); right: calc(12px + var(--sr)); display: flex; justify-content: space-between; gap: 10px; pointer-events: none; }
+.fab { pointer-events: auto; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 22px; background: var(--card); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: var(--shadow); font-weight: 600; cursor: pointer; transition: transform .15s, background .15s; }
+.fab:hover { background: var(--solid); transform: translateY(-1px); }
+.fab[aria-expanded="true"] { background: var(--brand); color: #fff; border-color: var(--brand); }
+.fab svg, .icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.fab:focus-visible, .icon-btn:focus-visible, #list button:focus-visible { outline: 2px solid var(--brand2); outline-offset: 2px; }
+.icon-btn { width: 40px; height: 40px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 50%; cursor: pointer; }
+.icon-btn:hover { background: rgba(127,127,150,.2); }
+
+/* sidebar */
+#side { position: fixed; top: calc(12px + var(--st)); left: calc(12px + var(--sl)); bottom: calc(12px + var(--sb)); width: min(340px, calc(100vw - 24px)); display: flex; flex-direction: column; overflow: hidden; transform: translateX(calc(-100% - 24px)); visibility: hidden; transition: transform .28s ease, visibility .28s; }
+.side-open #side { transform: none; visibility: visible; }
+.side-open #side-btn { display: none; }
+#side header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 10px 14px 18px; color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand2)); }
+#side h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: .1px; }
+#side header p { margin: 1px 0 0; font-size: 12.5px; opacity: .85; }
+#side .icon-btn { color: #fff; }
+#list-wrap { flex: 1; overflow-y: auto; padding: 10px 10px 14px; overscroll-behavior: contain; }
+#list-wrap h2 { margin: 6px 8px 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+#list { list-style: none; margin: 0; padding: 0; }
+#list button { all: unset; box-sizing: border-box; width: 100%; min-height: 52px; display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; padding: 8px; border-radius: 12px; cursor: pointer; }
+#list button:hover { background: var(--tint); }
+#list b { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--tint); font-size: 13px; }
+#list small { display: block; color: var(--muted); font-size: 12px; }
+
+/* legend panel */
+#legend { position: fixed; top: calc(68px + var(--st)); right: calc(12px + var(--sr)); width: min(330px, calc(100vw - 24px)); max-height: calc(100dvh - 90px - var(--st) - var(--sb)); overflow-y: auto; padding: 6px 16px 14px; }
+#legend[hidden] { display: none; }
+#legend header { display: flex; align-items: center; justify-content: space-between; padding-top: 6px; }
+#legend h2 { margin: 0; font-size: 16px; }
+#legend h3 { margin: 12px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.row { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; min-height: 48px; cursor: pointer; border-bottom: 1px solid var(--line); }
+.row:last-child { border-bottom: 0; }
+.row small { display: block; color: var(--muted); font-size: 12px; }
+.switch { appearance: none; -webkit-appearance: none; width: 42px; height: 24px; margin: 0; border-radius: 12px; background: var(--line); position: relative; cursor: pointer; transition: background .2s; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35); transition: transform .2s; }
+.switch:checked { background: var(--brand2); }
+.switch:checked::after { transform: translateX(18px); }
+.switch:focus-visible { outline: 2px solid var(--brand2); outline-offset: 2px; }
+.scale { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 9px; }
+.scale li { display: flex; align-items: center; gap: 12px; }
+.scale i { width: 38px; height: 8px; border-radius: 4px; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
+
+/* map pins */
+.pin { width: 30px; height: 30px; display: grid; place-items: center; font-weight: 700; color: #fff; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.45); transition: transform .15s; }
+.leaflet-marker-icon:hover .pin { transform: scale(1.12); }
+.pin.sm { width: 24px; height: 24px; font-size: 12px; box-shadow: none; }
 .pin.parking { background: var(--blue); border-radius: 50%; }
 .pin.charging { background: var(--amber); border-radius: 50%; color: #3a2b00; }
 .pin.safe { background: var(--green); border-radius: 50%; }
 .pin.noentry { background: var(--red); border-radius: 50%; }
 .pin.noentry i { display: block; width: 58%; height: 4px; background: #fff; border-radius: 2px; }
 .pin.caution { background: var(--orange); border: none; clip-path: polygon(50% 4%, 98% 94%, 2% 94%); box-shadow: none; padding-top: 7px; color: #2b1800; }
-.pin.roads { background: linear-gradient(90deg, #d92d20 50%, #f79009 50%); border-radius: 4px; }
 .pin.sm.caution { padding-top: 5px; }
-
-.badge { font-size: 11.5px; font-weight: 600; padding: 1px 7px; border-radius: 10px; white-space: nowrap; color: #fff; }
+.pin.roads { background: linear-gradient(90deg, var(--red) 50%, var(--orange) 50%); border-radius: 7px; }
+.badge { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 10px; white-space: nowrap; color: #fff; }
 .badge.red { background: var(--red); } .badge.orange { background: var(--orange); color: #2b1800; }
 .badge.yellow { background: #f2d600; color: #2b2500; } .badge.green { background: var(--green); }
 
-/* hover video + popup */
-.vtip { padding: 0; border: 0; border-radius: 8px; overflow: hidden; }
+/* leaflet polish */
+.leaflet-bar, .leaflet-control-layers { border: 0 !important; border-radius: 12px !important; box-shadow: var(--shadow) !important; overflow: hidden; }
+.leaflet-bottom { padding-bottom: var(--sb); } .leaflet-right { padding-right: var(--sr); }
+.leaflet-popup-content-wrapper { border-radius: 14px; }
+.vtip { padding: 0; border: 0; border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
 .vtip::before { display: none; }
-.tip { width: 260px; background: #fff; }
-.tip strong { display: block; padding: 8px 10px; font-size: 13px; color: var(--red); }
+.tip { width: 260px; background: #fff; color: #1d1a26; }
+.tip strong { display: block; padding: 9px 12px; font-size: 13px; color: var(--red); }
 .tip video, .tip .novid { width: 100%; height: 146px; object-fit: cover; background: #111; display: block; }
-.tip small { display: block; padding: 6px 10px; color: var(--muted); }
+.tip small { display: block; padding: 6px 12px 8px; color: #6b6779; }
 .novid { display: grid; place-items: center; color: #c9c5d6; background: #23202e; font-size: 13px; }
-.pop img { width: 100%; border-radius: 6px; margin-bottom: 6px; }
+.pop img { width: 100%; border-radius: 8px; margin-bottom: 6px; }
 
-/* enlarged view */
-#modal { position: fixed; inset: 0; background: rgba(20,16,30,.72); display: grid; place-items: center; z-index: 2000; padding: 20px; }
+/* enlarged no-entry view */
+#modal { position: fixed; inset: 0; background: rgba(20,16,30,.74); display: grid; place-items: center; z-index: 2000; padding: calc(16px + var(--st)) 16px calc(16px + var(--sb)); }
 #modal[hidden] { display: none; }
-.sheet { background: #fff; width: min(820px, 100%); max-height: 100%; overflow-y: auto; border-radius: 12px; padding: 22px 26px 26px; position: relative; }
-.close { position: absolute; top: 12px; right: 14px; font-size: 24px; line-height: 1; border: 0; background: none; cursor: pointer; padding: 4px 10px; border-radius: 6px; }
-.close:hover, .close:focus-visible { background: #ebe7f4; outline: none; }
-.sheet h2 { margin: 0 40px 2px 0; font-size: 20px; color: var(--red); }
+.sheet { background: var(--solid); width: min(840px, 100%); max-height: 100%; overflow-y: auto; border-radius: 20px; padding: 22px 26px 26px; position: relative; box-shadow: var(--shadow); }
+.close { position: absolute; top: 12px; right: 14px; font-size: 26px; line-height: 1; border: 0; background: none; cursor: pointer; width: 40px; height: 40px; border-radius: 50%; }
+.close:hover, .close:focus-visible { background: var(--tint); outline: none; }
+.sheet h2 { margin: 0 44px 2px 0; font-size: 20px; color: var(--red); }
 .sheet h3 { font-size: 14px; margin: 18px 0 6px; }
 .sheet .sub { margin: 0 0 12px; color: var(--muted); }
-.sheet video, .sheet .novid { width: 100%; height: 380px; border-radius: 8px; background: #111; object-fit: contain; }
+.sheet video, .sheet .novid { width: 100%; height: min(380px, 45dvh); border-radius: 12px; background: #111; object-fit: contain; }
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0 0; }
-.stats div { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.stats div { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--tint); }
 .stats dt { font-size: 12px; color: var(--muted); } .stats dd { margin: 2px 0 0; font-size: 18px; font-weight: 650; }
 .muted { color: var(--muted); font-weight: 400; font-size: 13px; }
 .sheet svg { width: 100%; height: auto; display: block; }
 .sheet svg .fill { fill: rgba(217,45,32,.15); } .sheet svg .line { fill: none; stroke: var(--red); stroke-width: 2.5; }
 .axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
 
-@media (max-width: 800px) { body { grid-template-columns: 1fr; grid-template-rows: 40% 60%; } .stats { grid-template-columns: 1fr; } .sheet video, .sheet .novid { height: 230px; } }
+@media (max-width: 800px) {
+  .stats { grid-template-columns: 1fr; }
+  .sheet { padding: 18px 16px 20px; }
+  #legend { top: auto; bottom: calc(12px + var(--sb)); right: calc(12px + var(--sr)); left: calc(12px + var(--sl)); width: auto; max-height: 62dvh; }
+}
+@media (max-width: 480px) { .fab span { display: none; } .fab { padding: 0 13px; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
-<aside>
-  <header>
-    <h1>Interactive e-Bike Route Safety Map</h1>
-    <p>UiTM Shah Alam</p>
-  </header>
-  <div class="sec"><h2>Show on map</h2><div id="toggles"></div></div>
-  <div id="list-wrap"><h2 style="font-size:13px;margin:0 0 6px">Risky places</h2><ul id="list"></ul></div>
-</aside>
 <div id="map"></div>
+
+<div class="hud">
+  <button id="side-btn" class="fab" aria-expanded="false" aria-controls="side">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Places</span>
+  </button>
+  <button id="legend-btn" class="fab" aria-expanded="false" aria-controls="legend" style="margin-left:auto">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 13 9 5 9-5"/></svg><span>Legend</span>
+  </button>
+</div>
+
+<aside id="side" class="card" aria-label="Risky places">
+  <header>
+    <div><h1>eBike Route Safety</h1><p>UiTM Shah Alam</p></div>
+    <button id="side-close" class="icon-btn" aria-label="Close list"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </header>
+  <div id="list-wrap"><h2>Risky places</h2><ul id="list"></ul></div>
+</aside>
+
+<section id="legend" class="card" hidden aria-label="Map legend">
+  <header>
+    <h2>Legend</h2>
+    <button id="legend-close" class="icon-btn" aria-label="Close legend"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </header>
+  <h3>Show on map</h3>
+  <div id="toggles"></div>
+  <h3>Road colors</h3>
+  <ul class="scale">
+    <li><i style="background:#2e9e5b"></i>Safe</li>
+    <li><i style="background:#f2d600"></i>Moderate</li>
+    <li><i style="background:#f79009"></i>Slightly dangerous</li>
+    <li><i style="background:#d92d20"></i>Danger: no entry</li>
+  </ul>
+</section>
 
 <div id="modal" hidden role="dialog" aria-modal="true">
   <div class="sheet"><button class="close" aria-label="Close">&times;</button><div id="modal-body"></div></div>
