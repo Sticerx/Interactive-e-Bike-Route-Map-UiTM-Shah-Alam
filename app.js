@@ -180,3 +180,14 @@ document.getElementById('side-close').addEventListener('click', () => setSidebar
 map.on('click', () => { setLegend(false); if (innerWidth < 800) setSidebar(false); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.hidden) setLegend(false); });
 setSidebar(innerWidth >= 800);
+
+// ----- UiTM boundary: always on, not clickable, sits under the roads and markers -----
+if (typeof BOUNDARY_GEOJSON !== 'undefined' && BOUNDARY_GEOJSON) {
+  try {
+    map.createPane('boundary').style.zIndex = 350;
+    const ring = style => L.geoJSON(BOUNDARY_GEOJSON, { pane: 'boundary', interactive: false, style: { fill: false, lineJoin: 'round', ...style } }).addTo(map);
+    ring({ color: '#6a45b8', weight: 14, opacity: .22 });                    // soft glow
+    ring({ color: '#ffffff', weight: 5, opacity: .9 });                      // white edge
+    ring({ color: '#6a45b8', weight: 3, dashArray: '12 7', opacity: 1 });    // purple dashed line
+  } catch (e) { console.warn('Boundary GeoJSON could not be drawn', e); }
+}
