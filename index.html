@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob:; connect-src https:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' https:">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#4b2e83">
 <meta name="color-scheme" content="light">
@@ -111,6 +111,18 @@ button { font: inherit; color: inherit; }
 .muted { color: var(--muted); font-weight: 400; font-size: 13px; }
 .sheet svg { width: 100%; height: auto; display: block; }
 .sheet svg .fill { fill: rgba(217,45,32,.15); } .sheet svg .line { fill: none; stroke: var(--red); stroke-width: 2.5; }
+.chart { width: 100%; height: auto; display: block; touch-action: pan-y; cursor: crosshair; }
+.chart text { font-size: 10px; fill: var(--muted); }
+.chart .grid { stroke: #e6e2ef; stroke-width: 1; }
+.chart .axl { stroke: #8d879c; stroke-width: 1.2; }
+.chart .ext { font-weight: 700; fill: var(--ink); }
+.chart .ttl { font-size: 12px; fill: var(--ink); }
+.chart .ln { fill: none; stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
+.chart .xh { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .dot { fill: #fff; stroke: #1d1a26; stroke-width: 2.5; }
+.readout { min-height: 24px; padding: 6px 2px 0; font-size: 13px; }
+.tip.tipg { width: 300px; } .tip .readout { padding: 2px 12px 0; color: #1d1a26; }
+.tip.tipg svg { padding: 0 4px; }
 .axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
 
 @media (max-width: 800px) {
@@ -165,6 +177,7 @@ button { font: inherit; color: inherit; }
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="data.js"></script>
+<script src="tracks.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
