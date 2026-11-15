@@ -100,12 +100,12 @@ function profileSVG(r) {
   const pts = p.map(d => `${((d[0] - x0) / (x1 - x0 || 1) * W).toFixed(1)},${(H - 8 - (d[1] - y0) / (y1 - y0 || 1) * (H - 20)).toFixed(1)}`).join(' ');
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Elevation profile"><polygon points="${pts} ${W},${H} 0,${H}" class="fill"/><polyline points="${pts}" class="line"/></svg>
     <div class="axis"><span>${y0} m low</span><span>${y1} m high</span></div>
-    ${r.est ? '<p class="muted">Estimated from about 90 m resolution terrain data, so short slopes look rougher than they are. Confirm with Google Earth Pro or a GPS reading.</p>' : ''}`;
+    ${r.est ? (r.est.gpx ? '<p class="muted">From your GPX file (lightly smoothed). Up and down are counted along the direction the track was drawn.</p>' : '<p class="muted">Estimated from about ' + (r.est.res || '90 m') + ' resolution terrain data, so short slopes look rougher than they are. Confirm with Google Earth Pro or a GPS reading.</p>') : ''}`;
 }
 function dataBlock(r) {
   const s = r.stats || {}, e = r.est || {};
   const stat = (label, v) => `<div><dt>${label}</dt><dd>${v ? esc(v) : '<span class="muted">Not added yet</span>'}</dd></div>`;
-  return `<dl class="stats">${stat('Elevation gain', s.elevation || e.elevation)}${stat('Max gradient', s.gradient || e.gradient)}${stat('Road length', s.length || e.length)}</dl>
+  return `<dl class="stats">${stat('Elevation change', s.elevation || e.elevation)}${stat('Max gradient', s.gradient || e.gradient)}${stat('Road length', s.length || e.length)}</dl>
     <h3>Why riders cannot use this road</h3>
     <p>${s.reason ? esc(s.reason) : '<span class="muted">Add the reason in data.js (stats.reason).</span>'}</p>
     <h3>Elevation profile</h3>${profileSVG(r)}`;
@@ -122,22 +122,75 @@ function samplePoints(line, n) {
   }
   return out;
 }
-async function loadElevation(r) {
+async function getElevations(pts) {
+  try {   // finer 30 m terrain data first (OpenTopoData SRTM)
+    const loc = pts.map(p => p.lat.toFixed(6) + ',' + p.lng.toFixed(6)).join('|');
+    const j = await (await fetch('https://api.opentopodata.org/v1/srtm30m?locations=' + loc)).json();
+    const el = j.results.map(x => x.elevation);
+    if (el.length === pts.length && el.every(v => typeof v === 'number')) return { el, res: '30 m' };
+  } catch (e) { console.warn('30 m elevation unavailable, using 90 m', e); }
+  const url = `https://api.open-meteo.com/v1/elevation?latitude=${pts.map(p => p.lat.toFixed(6))}&longitude=${pts.map(p => p.lng.toFixed(6))}`;
+  return { el: (await (await fetch(url)).json()).elevation, res: '90 m' };
+}
+async function loadTerrain(r) {
   const rd = ROADS.find(x => x.risk === r.id); if (!rd) return;
   r.loading = true; refresh(r);
   try {
     await rd.ready;
     const pts = samplePoints(rd.line, 40);
-    const url = `https://api.open-meteo.com/v1/elevation?latitude=${pts.map(p => p.lat.toFixed(6))}&longitude=${pts.map(p => p.lng.toFixed(6))}`;
-    const el = (await (await fetch(url)).json()).elevation;
+    const { el, res } = await getElevations(pts);
     if (!el || el.length !== pts.length) throw new Error('bad data');
-    let gain = 0, grad = 0;
-    for (let i = 1; i < el.length; i++) gain += Math.max(0, el[i] - el[i - 1]);
+    let gain = 0, down = 0, grad = 0;
+    for (let i = 1; i < el.length; i++) { gain += Math.max(0, el[i] - el[i - 1]); down += Math.max(0, el[i - 1] - el[i]); }
     for (let i = 4; i < el.length; i++) grad = Math.max(grad, Math.abs(el[i] - el[i - 4]) / (pts[i].dist - pts[i - 4].dist) * 100);
     r.profile = pts.map((p, i) => [Math.round(p.dist), el[i]]);
-    r.est = { elevation: gain.toFixed(1) + ' m (est.)', gradient: grad.toFixed(1) + '% (est.)', length: Math.round(pts[pts.length - 1].dist) + ' m' };
+    r.est = { elevation: down.toFixed(1) + ' m down / ' + gain.toFixed(1) + ' m up (est.)', gradient: grad.toFixed(1) + '% (est.)', length: Math.round(pts[pts.length - 1].dist) + ' m', res };
   } catch (e) { console.warn('Elevation failed', e); }
   r.loading = false; refresh(r);
+}
+
+// ----- elevation from your own GPX track (preferred over terrain estimates) -----
+function readText(url) {
+  return new Promise((res, rej) => {
+    const x = new XMLHttpRequest();
+    x.open('GET', url);
+    x.onload = () => ((x.status === 200 || x.status === 0) && x.responseText ? res(x.responseText) : rej(new Error('GPX not found: ' + url)));
+    x.onerror = () => rej(new Error('GPX not found: ' + url));
+    x.send();
+  });
+}
+async function loadGPX(url) {
+  const doc = new DOMParser().parseFromString(await readText(url), 'application/xml');
+  const raw = [...doc.querySelectorAll('trkpt, rtept')]
+    .map(p => ({ lat: +p.getAttribute('lat'), lng: +p.getAttribute('lon'), ele: parseFloat(p.querySelector('ele')?.textContent) }))
+    .filter(p => !isNaN(p.ele));
+  if (raw.length < 2) throw new Error('GPX has no elevation points');
+  // 5-point moving average to reduce GPS noise
+  const e = raw.map((p, i) => { const s = raw.slice(Math.max(0, i - 2), i + 3); return s.reduce((t, q) => t + q.ele, 0) / s.length; });
+  let dist = 0;
+  const d = raw.map((p, i) => (i ? (dist += map.distance([raw[i - 1].lat, raw[i - 1].lng], [p.lat, p.lng])) : 0));
+  return { d, e, total: dist };
+}
+function gpxStats(g, r) {
+  const { d, e, total } = g; let gain = 0, down = 0, grad = 0;
+  for (let i = 1; i < e.length; i++) { gain += Math.max(0, e[i] - e[i - 1]); down += Math.max(0, e[i - 1] - e[i]); }
+  for (let i = 0, j = 0; i < e.length; i++) {              // steepest stretch over at least 25 m
+    while (j < i && d[i] - d[j + 1] >= 25) j++;
+    if (d[i] - d[j] >= 25) grad = Math.max(grad, Math.abs(e[i] - e[j]) / (d[i] - d[j]) * 100);
+  }
+  const step = Math.max(1, Math.floor(e.length / 80)), idx = [];
+  for (let i = 0; i < e.length; i += step) idx.push(i);
+  if (idx[idx.length - 1] !== e.length - 1) idx.push(e.length - 1);
+  r.profile = idx.map(i => [Math.round(d[i]), +e[i].toFixed(1)]);
+  return { gpx: true, elevation: down.toFixed(1) + ' m down / ' + gain.toFixed(1) + ' m up', gradient: grad.toFixed(1) + '%', length: Math.round(total) + ' m' };
+}
+async function loadElevation(r) {
+  if (r.gpx) {
+    r.loading = true; refresh(r);
+    try { r.est = gpxStats(await loadGPX(r.gpx), r); } catch (e) { console.warn('GPX could not be read', e); }
+    r.loading = false; refresh(r);
+  }
+  if (!r.profile) await loadTerrain(r);   // falls back to terrain estimate
 }
 function openModal(r) {
   current = r;
